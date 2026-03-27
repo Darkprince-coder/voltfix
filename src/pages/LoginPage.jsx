@@ -102,7 +102,7 @@ export default function LoginPage() {
           </form>
 
           <p className="text-center text-xs mt-6" style={{ color: 'var(--text-muted)' }}>
-            Use the email &amp; password you set up in Supabase Auth.
+            Use the email &amp; password you set up in Auth.
           </p>
         </div>
 

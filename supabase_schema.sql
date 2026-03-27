@@ -90,20 +90,4 @@ create policy "Authenticated full access" on public.payments
   for all using (auth.role() = 'authenticated');
 
 
--- ── 7. Sample seed data (optional — comment out if not needed) ────
-/*
-insert into public.inventory_items (name, quantity, price_ksh, low_stock_threshold) values
-  ('Samsung Capacitor 10µF',   15, 30,   5),
-  ('LG Power Board',            3, 850,  3),
-  ('TV Remote Chip IC',         8, 120,  4),
-  ('Soldering Wire 500g',       2, 450,  3),
-  ('HDMI Port Connector',      20, 75,   5),
-  ('Universal Remote Control',  6, 350,  4),
-  ('Thermal Paste 5g',         12, 80,   5),
-  ('Phone Charging Port',       0, 200,  5);
 
-insert into public.repair_jobs (customer_name, phone, device_type, problem_description, service_cost_ksh, status, completed_at) values
-  ('John Kamau',   '0712345678', 'TV',    'Screen flickering and no sound',   1500, 'completed', now() - interval '1 day'),
-  ('Mary Wanjiku', '0798765432', 'Phone', 'Battery not charging',              800, 'in_progress', null),
-  ('David Ochieng','0756112233', 'Radio', 'No FM reception',                   600, 'pending',  null);
-*/
