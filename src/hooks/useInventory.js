@@ -63,22 +63,103 @@ export function useInventory() {
     return true
   }
 
-  /** Reduce stock after a job is completed */
+  /**
+   * Reduce stock when a job is marked as completed.
+   *
+   * partsUsed comes from job.job_parts which Supabase returns as:
+   *   [{ id, quantity_used, inventory_item_id, inventory_items: { id, name, price_ksh } }]
+   *
+   * We resolve the item id from BOTH possible locations so it works
+   * regardless of how the join is shaped.
+   */
   const reduceStock = async (partsUsed) => {
-    // partsUsed: [{ inventory_item_id, quantity_used }]
+    if (!partsUsed || partsUsed.length === 0) return
+
+    // Re-fetch fresh stock levels right before deducting to avoid stale state
+    const { data: freshItems, error: fetchError } = await supabase
+      .from('inventory_items')
+      .select('id, quantity')
+
+    if (fetchError) {
+      console.error('reduceStock: failed to fetch fresh items', fetchError)
+      return
+    }
+
     for (const part of partsUsed) {
-      const item = items.find(i => i.id === part.inventory_item_id)
-      if (!item) continue
-      const newQty = Math.max(0, item.quantity - part.quantity_used)
-      await supabase
+      // Resolve the inventory item id from either the flat field or the nested join object
+      const itemId = part.inventory_item_id || part.inventory_items?.id
+      if (!itemId) { console.warn('reduceStock: could not resolve item id for part', part); continue }
+
+      const qtyUsed = Number(part.quantity_used) || 0
+      if (qtyUsed <= 0) continue
+
+      const freshItem = freshItems.find(i => i.id === itemId)
+      if (!freshItem) { console.warn('reduceStock: item not found in DB', itemId); continue }
+
+      const newQty = Math.max(0, freshItem.quantity - qtyUsed)
+
+      const { error } = await supabase
         .from('inventory_items')
         .update({ quantity: newQty })
-        .eq('id', item.id)
+        .eq('id', itemId)
+
+      if (error) console.error('reduceStock: failed to update item', itemId, error)
     }
-    await fetchItems() // refresh all stock
+
+    // Refresh local state after all updates
+    await fetchItems()
+  }
+
+  /**
+   * Restore stock when a completed job is deleted.
+   * Adds back the quantities that were previously deducted.
+   */
+  const restoreStock = async (partsUsed) => {
+    if (!partsUsed || partsUsed.length === 0) return
+
+    const { data: freshItems, error: fetchError } = await supabase
+      .from('inventory_items')
+      .select('id, quantity')
+
+    if (fetchError) {
+      console.error('restoreStock: failed to fetch fresh items', fetchError)
+      return
+    }
+
+    for (const part of partsUsed) {
+      const itemId = part.inventory_item_id || part.inventory_items?.id
+      if (!itemId) continue
+
+      const qtyUsed = Number(part.quantity_used) || 0
+      if (qtyUsed <= 0) continue
+
+      const freshItem = freshItems.find(i => i.id === itemId)
+      if (!freshItem) continue
+
+      const newQty = freshItem.quantity + qtyUsed
+
+      const { error } = await supabase
+        .from('inventory_items')
+        .update({ quantity: newQty })
+        .eq('id', itemId)
+
+      if (error) console.error('restoreStock: failed to restore item', itemId, error)
+    }
+
+    await fetchItems()
   }
 
   const lowStockItems = items.filter(i => i.quantity <= (i.low_stock_threshold ?? 5))
 
-  return { items, loading, addItem, updateItem, deleteItem, reduceStock, refetch: fetchItems, lowStockItems }
+  return {
+    items,
+    loading,
+    addItem,
+    updateItem,
+    deleteItem,
+    reduceStock,
+    restoreStock,
+    refetch: fetchItems,
+    lowStockItems,
+  }
 }

@@ -125,10 +125,22 @@ export function useJobs() {
     return data
   }
 
-  const deleteJob = async (id) => {
-    // Parts and payments cascade-delete (set up in Supabase)
+  /**
+   * Delete a job. If the job was completed, pass restoreStockFn so
+   * the parts that were deducted get added back to inventory.
+   */
+  const deleteJob = async (id, restoreStockFn) => {
+    // Grab the job's parts and status BEFORE deleting (cascade will wipe job_parts)
+    const job = jobs.find(j => j.id === id)
+
     const { error } = await supabase.from('repair_jobs').delete().eq('id', id)
     if (error) { toast.error('Failed to delete job'); return false }
+
+    // If the job was completed, restore the stock that was deducted
+    if (job?.status === 'completed' && restoreStockFn && job?.job_parts?.length > 0) {
+      await restoreStockFn(job.job_parts)
+    }
+
     setJobs(prev => prev.filter(j => j.id !== id))
     toast.success('Job deleted')
     return true

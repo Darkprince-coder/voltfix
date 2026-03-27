@@ -80,6 +80,7 @@ function AppShell() {
                   updateJobStatus={jobsHook.updateJobStatus}
                   deleteJob={jobsHook.deleteJob}
                   reduceStock={inv.reduceStock}
+                  restoreStock={inv.restoreStock}
                 />
               }
             />

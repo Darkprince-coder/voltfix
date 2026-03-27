@@ -15,7 +15,7 @@ const EMPTY_FORM = {
   service_cost_ksh: '', status: 'pending',
 }
 
-export default function JobsPage({ jobs, loading, inventory, addJob, updateJob, updateJobStatus, deleteJob, reduceStock }) {
+export default function JobsPage({ jobs, loading, inventory, addJob, updateJob, updateJobStatus, deleteJob, reduceStock, restoreStock }) {
   const [search,     setSearch]     = useState('')
   const [statusFilter, setStatusFilter] = useState('all')
   const [modal,      setModal]      = useState(false)
@@ -81,7 +81,23 @@ export default function JobsPage({ jobs, loading, inventory, addJob, updateJob, 
   }
 
   const handleStatusChange = async (job, newStatus) => {
-    await updateJobStatus(job.id, newStatus, newStatus === 'completed' ? reduceStock : null)
+    const wasCompleted = job.status === 'completed'
+    const isNowCompleted = newStatus === 'completed'
+
+    // Reduce stock only when transitioning TO completed (not already completed)
+    if (isNowCompleted && !wasCompleted) {
+      await updateJobStatus(job.id, newStatus, reduceStock)
+    }
+    // Restore stock if un-completing a job (e.g. back to in_progress)
+    else if (wasCompleted && !isNowCompleted) {
+      await updateJobStatus(job.id, newStatus, null)
+      if (job.job_parts?.length > 0 && restoreStock) {
+        await restoreStock(job.job_parts)
+      }
+    }
+    else {
+      await updateJobStatus(job.id, newStatus, null)
+    }
   }
 
   const addPartRow    = () => setParts(p => [...p, { inventory_item_id: '', quantity_used: '1' }])
@@ -344,7 +360,7 @@ export default function JobsPage({ jobs, loading, inventory, addJob, updateJob, 
         open={!!confirmDel}
         title="Delete Job?"
         message="This will permanently delete the job and all its parts/payment records."
-        onConfirm={async () => { await deleteJob(confirmDel); setConfirmDel(null) }}
+        onConfirm={async () => { await deleteJob(confirmDel, restoreStock); setConfirmDel(null) }}
         onCancel={() => setConfirmDel(null)}
       />
     </div>
