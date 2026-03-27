@@ -13,7 +13,7 @@ const EMPTY_FORM = { name: '', quantity: '', price_ksh: '', low_stock_threshold:
 
 /* ─────────────────────────────────────────────────────────────────────────────
    PDF GENERATION
-   Uses jsPDF + jspdf-autotable loaded dynamically from CDN (no npm install).
+   Uses jsPDF + jspdf-autotable.
    orderRows: [{ name, currentQty, orderQty, unitPrice, supplier, notes }]
 ───────────────────────────────────────────────────────────────────────────── */
 async function generatePDF(orderRows, shopName = 'VoltFix') {

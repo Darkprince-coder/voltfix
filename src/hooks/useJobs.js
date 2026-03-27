@@ -15,6 +15,7 @@ export function useJobs() {
         job_parts (
           id,
           quantity_used,
+          inventory_item_id,
           inventory_items ( id, name, price_ksh )
         ),
         payments ( id, amount_paid_ksh, payment_method, paid_at )
@@ -33,13 +34,13 @@ export function useJobs() {
   useEffect(() => { fetchJobs() }, [fetchJobs])
 
   const addJob = async (jobData, partsUsed = []) => {
-    // 1. Insert the job
     const { data: job, error: jobError } = await supabase
       .from('repair_jobs')
       .insert([{
         customer_name:       jobData.customer_name,
         phone:               jobData.phone || null,
         device_type:         jobData.device_type,
+        device_model:        jobData.device_model?.trim() || null,   // ← new field
         problem_description: jobData.problem_description,
         service_cost_ksh:    Number(jobData.service_cost_ksh) || 0,
         status:              jobData.status || 'pending',
@@ -49,12 +50,11 @@ export function useJobs() {
 
     if (jobError) { toast.error('Failed to create job'); return null }
 
-    // 2. Insert parts used (if any)
     if (partsUsed.length > 0) {
       const partRows = partsUsed.map(p => ({
-        job_id:              job.id,
-        inventory_item_id:   p.inventory_item_id,
-        quantity_used:       Number(p.quantity_used),
+        job_id:            job.id,
+        inventory_item_id: p.inventory_item_id,
+        quantity_used:     Number(p.quantity_used),
       }))
       await supabase.from('job_parts').insert(partRows)
     }
@@ -77,7 +77,6 @@ export function useJobs() {
 
     if (error) { toast.error('Failed to update status'); return null }
 
-    // Auto-reduce stock when job is marked completed
     if (status === 'completed' && reduceStockFn) {
       const job = jobs.find(j => j.id === id)
       if (job?.job_parts?.length > 0) {
@@ -97,6 +96,7 @@ export function useJobs() {
         customer_name:       updates.customer_name,
         phone:               updates.phone || null,
         device_type:         updates.device_type,
+        device_model:        updates.device_model?.trim() || null,   // ← new field
         problem_description: updates.problem_description,
         service_cost_ksh:    Number(updates.service_cost_ksh) || 0,
         status:              updates.status,
@@ -107,7 +107,6 @@ export function useJobs() {
 
     if (error) { toast.error('Failed to update job'); return null }
 
-    // Replace parts if provided
     if (partsUsed !== null) {
       await supabase.from('job_parts').delete().eq('job_id', id)
       if (partsUsed.length > 0) {
@@ -126,17 +125,14 @@ export function useJobs() {
   }
 
   /**
-   * Delete a job. If the job was completed, pass restoreStockFn so
-   * the parts that were deducted get added back to inventory.
+   * Delete a job. If completed, restore stock first.
    */
   const deleteJob = async (id, restoreStockFn) => {
-    // Grab the job's parts and status BEFORE deleting (cascade will wipe job_parts)
     const job = jobs.find(j => j.id === id)
 
     const { error } = await supabase.from('repair_jobs').delete().eq('id', id)
     if (error) { toast.error('Failed to delete job'); return false }
 
-    // If the job was completed, restore the stock that was deducted
     if (job?.status === 'completed' && restoreStockFn && job?.job_parts?.length > 0) {
       await restoreStockFn(job.job_parts)
     }
